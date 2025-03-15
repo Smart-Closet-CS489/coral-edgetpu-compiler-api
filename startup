@@ -1,0 +1,110 @@
+#!/bin/bash
+CONFIG_FILE="./config.env"  # Config file assumed to be in the same directory
+
+# Load the config file
+if [[ -f "$CONFIG_FILE" ]]; then
+    source "$CONFIG_FILE"
+else
+    echo "coral-edgetpu-compiler-api >>>> Config file not found: $CONFIG_FILE"
+    exit 1
+fi
+
+# Set repo path relative to the script's location
+SCRIPT_DIR="$(dirname "$0")"
+REPO_PATH="$SCRIPT_DIR"
+
+PORT=${CORAL_API_EDGETPU_COMPILER_API_PORT:-8000}  # Load port, fallback to 8000 if not found
+
+# Flags
+QUICK_START=false
+BUILD_ONLY=false
+INITIAL_BUILD=false
+SHUTDOWN=false
+
+# ---- PARSE COMMAND-LINE ARGUMENTS ----
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        -q|--quick) QUICK_START=true ;;
+        -b|--build) BUILD_ONLY=true ;;
+        -i|--initial) INITIAL_BUILD=true ;;
+        -s|--shutdown) SHUTDOWN=true ;;
+        --) shift; break ;;
+        -*)
+            echo "coral-edgetpu-compiler-api >>>> Unknown parameter: $1"
+            exit 1
+            ;;
+        *)
+            echo "coral-edgetpu-compiler-api >>>> Unknown parameter: $1"
+            exit 1
+            ;;
+    esac
+    shift
+done
+
+# ---- SHUTDOWN CONTAINER IF REQUESTED ----
+if [[ "$SHUTDOWN" == true ]]; then
+    echo "coral-edgetpu-compiler-api >>>> Stopping coral-edgetpu-compiler-api container..."
+    CONTAINER_ID=$(docker ps -q --filter "ancestor=coral-edgetpu-compiler-api-image")
+
+    if [[ -n "$CONTAINER_ID" ]]; then
+        docker stop "$CONTAINER_ID"
+        echo "coral-edgetpu-compiler-api >>>> coral-edgetpu-compiler-api container stopped."
+    else
+        echo "coral-edgetpu-compiler-api >>>> No running coral-edgetpu-compiler-api container found."
+    fi
+
+    exit 0
+fi
+
+# ---- CHECK IF CORAL API CONTAINER IS RUNNING AND STOP IT ----
+RUNNING_CONTAINER=$(docker ps -q --filter "name=coral-edgetpu-compiler-api-container")
+if [[ -n "$RUNNING_CONTAINER" ]]; then
+    echo "coral-edgetpu-compiler-api >>>> Existing coral-edgetpu-compiler-api container found. Stopping it..."
+    docker stop "$RUNNING_CONTAINER"
+    echo "coral-edgetpu-compiler-api >>>> Existing coral-edgetpu-compiler-api container stopped."
+fi
+
+# Build base image if -i flag is used
+if [[ "$INITIAL_BUILD" == true ]]; then
+    BASE_IMAGE_PATH="$REPO_PATH/base-image"
+
+    if [[ -d "$BASE_IMAGE_PATH" ]]; then
+        echo "coral-edgetpu-compiler-api >>>> Building base image..."
+
+        cd "$BASE_IMAGE_PATH" || exit 1
+        docker build -t "coral-edgetpu-compiler-api-base-image" ./ 
+        cd - > /dev/null
+
+        echo "coral-edgetpu-compiler-api >>>> Base image built."
+    else
+        echo "coral-edgetpu-compiler-api >>>> No base-image directory found, skipping base build."
+    fi
+fi
+
+# Build main image (skip if -q flag is used)
+if [[ "$QUICK_START" == false ]]; then
+    echo "coral-edgetpu-compiler-api >>>> Building coral-edgetpu-compiler-api..."
+    docker build -t "coral-edgetpu-compiler-api-image" ./ 
+else
+    echo "coral-edgetpu-compiler-api >>>> Quick start enabled, skipping build."
+fi
+
+# Exit if -b flag is set
+if [[ "$BUILD_ONLY" == true ]]; then
+    echo "coral-edgetpu-compiler-api >>>> Build-only mode enabled, skipping run."
+    cd - > /dev/null
+    exit 0
+fi
+
+# ---- START CORAL API ----
+echo "coral-edgetpu-compiler-api >>>> Starting coral-edgetpu-compiler-api..."
+cd "$REPO_PATH" || exit 1
+
+# Run container in the background
+echo "coral-edgetpu-compiler-api >>>> Running coral-edgetpu-compiler-api on port $PORT..."
+docker run --env-file "$CONFIG_FILE" -p "$PORT":8000 --rm -dit --name coral-edgetpu-compiler-api-container "coral-edgetpu-compiler-api-image"
+
+echo "coral-edgetpu-compiler-api >>>> coral-edgetpu-compiler-api started in the background."
+echo "coral-edgetpu-compiler-api >>>> Use 'docker logs -f coral-edgetpu-compiler-api-container' to see logs."
+cd - > /dev/null
+echo "coral-edgetpu-compiler-api >>>> Done."

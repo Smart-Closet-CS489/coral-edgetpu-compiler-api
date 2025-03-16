@@ -4,8 +4,7 @@ FROM debian:11
 RUN apt-get update && apt-get install -y \
     curl \
     python3 \
-    python3-pip \
-    zip
+    python3-pip
 
 # Add the Coral Edge TPU package repository
 RUN curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -

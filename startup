@@ -13,7 +13,7 @@ fi
 SCRIPT_DIR="$(dirname "$0")"
 REPO_PATH="$SCRIPT_DIR"
 
-PORT=${CORAL_API_EDGETPU_COMPILER_API_PORT:-8000}  # Load port, fallback to 8000 if not found
+PORT=${CORAL_EDGETPU_COMPILER_API_PORT:-8000}  # Load port, fallback to 8000 if not found
 
 # Flags
 QUICK_START=false
@@ -57,12 +57,25 @@ if [[ "$SHUTDOWN" == true ]]; then
 fi
 
 # ---- CHECK IF CORAL API CONTAINER IS RUNNING AND STOP IT ----
+# Check for running containers
 RUNNING_CONTAINER=$(docker ps -q --filter "name=coral-edgetpu-compiler-api-container")
+
+# Stop the running container if found
 if [[ -n "$RUNNING_CONTAINER" ]]; then
     echo "coral-edgetpu-compiler-api >>>> Existing coral-edgetpu-compiler-api container found. Stopping it..."
     docker stop "$RUNNING_CONTAINER"
     echo "coral-edgetpu-compiler-api >>>> Existing coral-edgetpu-compiler-api container stopped."
 fi
+
+# Remove any containers (running or stopped) with the name "coral-edgetpu-compiler-api-container"
+STOPPED_CONTAINER=$(docker ps -a -q --filter "name=coral-edgetpu-compiler-api-container")
+
+if [[ -n "$STOPPED_CONTAINER" ]]; then
+    echo "coral-edgetpu-compiler-api >>>> Removing existing coral-edgetpu-compiler-api container..."
+    docker rm "$STOPPED_CONTAINER"
+    echo "coral-edgetpu-compiler-api >>>> Existing coral-edgetpu-compiler-api container removed."
+fi
+
 
 # Build base image if -i flag is used
 if [[ "$INITIAL_BUILD" == true ]]; then
